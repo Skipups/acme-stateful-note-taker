@@ -1,1 +1,170 @@
-starthere
+<!DOCTYPE html>
+<html>
+  <head>
+    <script
+      src="https://unpkg.com/react@16/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.26.0/babel.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.0/axios.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-router-dom/5.1.2/react-router-dom.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+      integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm"
+      crossorigin="anonymous"
+    />
+  </head>
+
+  <body>
+    <div id="root"></div>
+  </body>
+  <script type="text/babel">
+    const root = document.getElementById("root");
+    const { HashRouter, Route, Link, Switch, Redirect } = ReactRouterDOM;
+
+    const API = "https://acme-users-api-rev.herokuapp.com/api";
+
+    const Note = props => {
+      return <div>Notes</div>;
+    };
+    const Archived = props => {
+      return <div>Archived</div>;
+    };
+
+    const Nav = props => {
+      console.log("nav state ", props);
+      return (
+        <nav className="navbar navbar-dark bg-dark">
+          <Link to="/notes">
+            Notes ({props.state.notes ? props.state.notes.length : 0})
+          </Link>
+          <Link to="/archived">
+            Archived ({props.archived ? props.archived.length : 0})
+          </Link>
+          <Link to="/form">Make a Task </Link>
+        </nav>
+      );
+    };
+    class Form extends React.Component {
+      constructor(state) {
+        // console.log("state", state.state);
+        super();
+        this.state = {
+          task: null,
+          user: state.state.user || null
+        };
+      }
+      handleInput = ev => {
+        this.setState({ task: ev.target.value });
+      };
+      handleSubmit = form => {
+        form.preventDefault();
+        const userID = this.state.user.id;
+        const task = this.state.task;
+        window
+          .fetch(
+            `https://acme-users-api-rev.herokuapp.com/api/users/${userID}/notes`,
+            { archived: false, text: task }
+          )
+          .then(data => data.json())
+          .then(data => {
+            console.log("data", data);
+          });
+      };
+      render() {
+        console.log("form this.state", this.state);
+        return (
+          <div>
+            <h1>
+              Acme Note Taker for (
+              {this.state.user ? this.state.user.fullName : "User Not Found"})
+            </h1>
+            <form onSubmit={this.handleSubmit}>
+              <div className="form-group">
+                <label htmlFor="tasks">Type a Task</label>
+                <input
+                  onChange={this.handleInput}
+                  className="form-control"
+                  type="text"
+                  required
+                />
+              </div>
+              <button className="btn btn-outline-primary">Save</button>
+            </form>
+          </div>
+        );
+      }
+    }
+    class App extends React.Component {
+      constructor() {
+        super();
+        this.state = {
+          notes: [],
+          archived: [],
+          user: null
+        };
+      }
+      fetchUser = async () => {
+        const storage = window.localStorage;
+        const userId = storage.getItem("userId");
+        if (userId) {
+          try {
+            return (await axios.get(`${API}/users/detail/${userId}`)).data;
+          } catch (ex) {
+            storage.removeItem("userId");
+            return fetchUser();
+          }
+        }
+        const user = (await axios.get(`${API}/users/random`)).data;
+        storage.setItem("userId", user.id);
+        return user;
+      };
+      componentDidMount = () => {
+        const compContext = this;
+        this.fetchUser()
+          .then(data => {
+            compContext.setState({ user: data });
+            console.log("app state", compContext.state);
+            return data;
+          })
+          .then(user => {
+            console.log("user", user);
+            window
+              .fetch(
+                `https://acme-users-api-rev.herokuapp.com/api/users/${user.id}/notes`
+              )
+              .then(returnedNotes => returnedNotes.json())
+              .then(returnedNotes => {
+                console.log(returnedNotes);
+                const allNotes = returnedNotes.filter(
+                  note => note.userId === user.id
+                );
+                compContext.setState({ notes: allNotes });
+              });
+          });
+        // this.setState({ user: user });
+      };
+      render() {
+        //console.log("app state ", this.state);
+        return (
+          <div>
+            <HashRouter>
+              <Route render={props => <Nav state={this.state} />} />
+              <Route path="/notes" component={Note} />
+              <Route path="/archived" component={Archived} />
+              <Route path="/form" render={() => <Form state={this.state} />} />
+            </HashRouter>
+          </div>
+        );
+      }
+    }
+
+    ReactDOM.render(<App />, root);
+  </script>
+</html>
